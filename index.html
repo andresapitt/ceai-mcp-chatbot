@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meadow Vet Care — Ask us anything</title>
+  <meta name="description" content="Customer chatbot for Meadow Vet Care, answering from the clinic's live service catalogue." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>" />
+</head>
+<body>
+  <!-- Top navigation -->
+  <nav class="top-nav">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 21c-1.2 0-2.3-.5-3.4-1.2C7.2 18.7 5 17.5 5 15c0-1.9 1.5-3.4 3.4-3.4.9 0 1.8.4 2.4 1 .3.3.5.6.7 1h.9c.2-.4.4-.7.7-1 .6-.6 1.5-1 2.4-1C17.5 11.6 19 13.1 19 15c0 2.5-2.2 3.7-3.6 4.8C14.3 20.5 13.2 21 12 21z"/>
+        <circle cx="6.5" cy="8" r="1.7"/><circle cx="10" cy="5.5" r="1.7"/>
+        <circle cx="14" cy="5.5" r="1.7"/><circle cx="17.5" cy="8" r="1.7"/>
+      </svg>
+      <div>
+        Meadow Vet Care
+        <small>Dogs · Cats · Rabbits · Small mammals · Birds</small>
+      </div>
+    </div>
+    <div class="nav-right">
+      <span class="data-status" id="dataStatus" title="Data is fetched live from the clinic's Google Sheet">
+        <span class="dot loading" id="dataDot"></span>
+        <span id="dataLabel">Loading live data…</span>
+      </span>
+      <button class="icon-btn" id="settingsBtn" title="Connect the AI brain">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span id="modeLabel">Demo mode</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Chat -->
+  <main class="chat-wrap">
+    <div class="messages" id="messages">
+      <div class="intro" id="intro">
+        <h1>Hi! How can we help your pet today? 🐾</h1>
+        <p>Ask about any of our 90+ services — prices, availability, offers and more. Answers come straight from the clinic's live catalogue.</p>
+        <div class="suggestions" id="suggestions"></div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-inner">
+        <textarea id="input" rows="1" placeholder="Ask about a service, price, or offer…"></textarea>
+        <button class="send-orb" id="send" title="Send">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </div>
+      <div class="composer-hint">
+        Live data from the clinic's Google Sheet ·
+        <a href="#" id="refreshLink">refresh</a> ·
+        <span id="serviceCount">—</span> services loaded
+      </div>
+    </div>
+  </main>
+
+  <!-- Settings modal -->
+  <div class="scrim" id="scrim">
+    <div class="modal">
+      <h2>AI brain</h2>
+      <p class="sub">
+        The AI brain runs server-side (a Vercel function that holds the Gemini key and
+        fetches the live sheet on every question). When it's reachable the badge reads
+        <strong>AI connected</strong>; otherwise the page falls back to a built-in
+        <strong>Demo mode</strong> responder that answers from the same live data — so it
+        always works.
+      </p>
+      <div class="field">
+        <label for="endpoint">Brain endpoint</label>
+        <input type="text" id="endpoint" placeholder="/api/vet-chat" autocomplete="off" spellcheck="false" />
+        <div class="help">
+          Same-origin on Vercel, so <code>/api/vet-chat</code> is the default. If you host
+          this page elsewhere (e.g. GitHub Pages) but the brain on Vercel, set the full URL,
+          e.g. <code>https://your-app.vercel.app/api/vet-chat</code>.
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="resetEndpoint">Reset</button>
+        <button class="btn btn-primary" id="saveEndpoint">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
