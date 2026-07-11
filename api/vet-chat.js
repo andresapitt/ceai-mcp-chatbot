@@ -118,13 +118,16 @@ function systemPrompt(catalogueText, categories, species) {
 
 // Map the chat history from the browser to Gemini's contents format.
 function toGeminiContents(messages) {
-  return (messages || [])
+  const mapped = (messages || [])
     .filter((m) => m && m.content && (m.role === "user" || m.role === "assistant"))
     .slice(-12) // keep the last few turns
     .map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: String(m.content) }],
     }));
+  // Gemini requires the conversation to begin with a user turn.
+  while (mapped.length && mapped[0].role !== "user") mapped.shift();
+  return mapped;
 }
 
 async function callGemini(contents, system) {
