@@ -19,12 +19,12 @@ window.CONFIG = {
     gid: "1277715587",
   },
 
-  // Where the AI brain lives. Same-origin on Vercel, so a relative path works.
-  // If you host this UI somewhere else (e.g. GitHub Pages) but the brain on
-  // Vercel, set this to the full URL, e.g.
-  //   "https://your-app.vercel.app/api/vet-chat"
+  // Where the AI brain lives. Set to the deployed Vercel URL so the page
+  // always reaches the live brain, regardless of where the page itself is
+  // opened from (Vercel, GitHub Pages, or a local file). Demo mode is then
+  // only ever a true fallback (endpoint unreachable), not the default.
   // You can also override it at runtime from the ⚙️ settings dialog.
-  chatEndpoint: "/api/vet-chat",
+  chatEndpoint: "https://ceai-mcp-chatbot.vercel.app/api/vet-chat",
 
   // localStorage key for a runtime endpoint override.
   endpointStorageKey: "mvc_chat_endpoint",
