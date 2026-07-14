@@ -41,7 +41,14 @@
     "Do you have telehealth services?",
     "How much is a dental cleaning for a cat?",
     "What can you do for rabbits?",
+    "Are you open Monday?",
+    "Is it too hot to walk my dog right now?",
   ];
+
+  // Clinic constants shared with api/vet-chat.js (kept in sync manually —
+  // separate runtimes, same values).
+  const CLINIC_LAT = 53.3498, CLINIC_LON = -6.2603, DUBLIN_TZ = "Europe/Dublin";
+  const OPEN_DAYS_LABEL = "Monday–Saturday, 09:00–18:00";
 
   function endpoint() {
     return (localStorage.getItem(CFG.endpointStorageKey) || CFG.chatEndpoint).trim();
@@ -247,6 +254,143 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // 3c. BRAIN — opening hours (live Irish public holidays) & weather (live)
+  //     Demo-mode equivalents of the two tools Gemini calls server-side, so
+  //     the page answers these the same way whether the AI brain is up or not.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  function ymdUTC(y, m, d) { return new Date(Date.UTC(y, m - 1, d, 12)); } // noon anchor avoids DST drift
+  function addDays(date, n) { return new Date(date.getTime() + n * 86400000); }
+  function isoDate(date) { return date.toISOString().slice(0, 10); }
+  function weekdayIndex(date) { return date.getUTCDay(); }
+  function weekdayName(date) { const w = WEEKDAYS[weekdayIndex(date)]; return w[0].toUpperCase() + w.slice(1); }
+
+  function dublinToday() {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: DUBLIN_TZ, year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(new Date());
+    const get = (t) => +parts.find((p) => p.type === t).value;
+    return ymdUTC(get("year"), get("month"), get("day"));
+  }
+
+  const holidayCacheClient = new Map(); // year -> Promise<data>
+  function fetchYearHolidaysClient(year) {
+    if (!holidayCacheClient.has(year)) {
+      holidayCacheClient.set(year, fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/IE`)
+        .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }));
+    }
+    return holidayCacheClient.get(year);
+  }
+
+  function matchHolidayFromText(text, holidays) {
+    const t = text.toLowerCase().replace(/'/g, "").replace(/paddys/g, "patricks");
+    for (const h of holidays) {
+      for (const raw of [h.name, h.localName]) {
+        if (!raw) continue;
+        const words = raw.toLowerCase().replace(/'/g, "").replace(/\bday\b/g, "").trim()
+          .split(/\s+/).filter((w) => w.length >= 4);
+        if (words.length && words.every((w) => t.includes(w))) return h;
+      }
+    }
+    return null;
+  }
+
+  function resolveDate(inputRaw, holidays) {
+    const input = (inputRaw || "today").toLowerCase().trim();
+    const today = dublinToday();
+    const iso = input.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return ymdUTC(+iso[1], +iso[2], +iso[3]);
+    if (/\btomorrow\b/.test(input)) return addDays(today, 1);
+    if (/\byesterday\b/.test(input)) return addDays(today, -1);
+    if (/\btoday\b/.test(input)) return today;
+    const wd = WEEKDAYS.findIndex((w) => input.includes(w));
+    if (wd !== -1) {
+      let delta = (wd - weekdayIndex(today) + 7) % 7;
+      if (/\bnext\b/.test(input) && delta === 0) delta = 7;
+      return addDays(today, delta);
+    }
+    const h = matchHolidayFromText(input, holidays);
+    if (h) { const [y, m, d] = h.date.split("-").map(Number); return ymdUTC(y, m, d); }
+    return today;
+  }
+
+  function isOpeningHoursQuery(t) {
+    return /\b(open|opening|closed|closing|hours?)\b/.test(t);
+  }
+
+  async function openingHoursAnswer(q) {
+    try {
+      const today = dublinToday();
+      const years = [today.getUTCFullYear(), today.getUTCFullYear() + 1];
+      const holidays = (await Promise.all(years.map(fetchYearHolidaysClient))).flat();
+      const date = resolveDate(q, holidays);
+      const iso = isoDate(date);
+      const wname = weekdayName(date);
+      const isSunday = wname === "Sunday";
+      const holiday = holidays.find((h) => h.date === iso && h.types && h.types.includes("Public"));
+      const isOpen = !isSunday && !holiday;
+      const nice = date.toLocaleDateString("en-IE", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+
+      if (isOpen) return `<p>Yes — we're <strong>open</strong> on ${nice}, ${OPEN_DAYS_LABEL.split(", ")[1]}. 🐾</p>`;
+      const reason = isSunday ? "we're closed on Sundays" : `it's <strong>${holiday.name}</strong>, an Irish public holiday`;
+      return `<p>We're <strong>closed</strong> on ${nice} — ${reason}.</p>` +
+        `<p style="color:var(--muted);font-size:13px">Normal hours: ${OPEN_DAYS_LABEL}.</p>`;
+    } catch (err) {
+      console.error("Opening-hours check failed:", err);
+      return `<p>Sorry, I couldn't check the calendar just now. Our normal hours are ${OPEN_DAYS_LABEL}, closed Sundays and Irish public holidays.</p>`;
+    }
+  }
+
+  const WEATHER_CODES = {
+    0: "clear sky", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
+    45: "fog", 48: "depositing rime fog",
+    51: "light drizzle", 53: "moderate drizzle", 55: "dense drizzle",
+    61: "slight rain", 63: "moderate rain", 65: "heavy rain",
+    71: "slight snow", 73: "moderate snow", 75: "heavy snow",
+    80: "rain showers", 81: "moderate rain showers", 82: "violent rain showers",
+    95: "thunderstorm", 96: "thunderstorm with hail", 99: "thunderstorm with heavy hail",
+  };
+
+  function dogWalkVerdict(apparentC) {
+    if (apparentC == null) return { verdict: "Unknown", advice: "Couldn't read the current temperature." };
+    if (apparentC >= 28) return {
+      verdict: "Too hot for a midday walk",
+      advice: "Stick to early morning or late evening, keep it short, bring water, and press your hand on the pavement for 5 seconds — if it's too hot for you, it's too hot for paws.",
+    };
+    if (apparentC >= 23) return {
+      verdict: "Caution — warm",
+      advice: "A walk is fine but keep it shorter, stick to shade, bring water, and avoid roughly 11am–4pm.",
+    };
+    if (apparentC <= 2) return {
+      verdict: "Cold",
+      advice: "A normal walk is fine for most dogs, but small, short-coated, young or older dogs may appreciate a coat.",
+    };
+    return { verdict: "Good conditions for a walk", advice: "Nothing unusual — a normal walk should be comfortable." };
+  }
+
+  function isWeatherQuery(t) {
+    return /\b(weather|too hot|too cold|walk (my|the|a) dog|safe to walk|temperature|feels like|is it hot|is it cold)\b/.test(t);
+  }
+
+  async function weatherAnswer() {
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${CLINIC_LAT}&longitude=${CLINIC_LON}` +
+        `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code&timezone=Europe%2FDublin`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const cur = data.current || {};
+      const { verdict, advice } = dogWalkVerdict(cur.apparent_temperature);
+      const conditions = WEATHER_CODES[cur.weather_code] || "changeable conditions";
+      return `<p>Right now it's <strong>${cur.temperature_2m}°C</strong> (feels like ${cur.apparent_temperature}°C), ${conditions}, ${cur.relative_humidity_2m}% humidity.</p>` +
+        `<p><strong>${verdict}.</strong> ${advice}</p>`;
+    } catch (err) {
+      console.error("Weather check failed:", err);
+      return `<p>Sorry, I couldn't reach the live weather data just now — please check a weather app before heading out. 🐾</p>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // 4. CHAT UI
   // ═══════════════════════════════════════════════════════════════════════════
   function addMessage(role, html) {
@@ -320,7 +464,7 @@
     els.input.value = ""; autosize();
     addMessage("user", escapeHtml(q));
 
-    const trace = showToolTrace("Checking the live catalogue…");
+    const trace = showToolTrace("Checking live data…");
     showTyping();
 
     try {
@@ -334,7 +478,10 @@
         console.warn("Brain endpoint unavailable, using demo responder:", err.message);
         history.pop(); // drop the user turn we optimistically pushed
         await new Promise((r) => setTimeout(r, 250));
-        answerHtml = demoAnswer(q);
+        const t = q.toLowerCase();
+        if (isOpeningHoursQuery(t)) answerHtml = await openingHoursAnswer(q);
+        else if (isWeatherQuery(t)) answerHtml = await weatherAnswer();
+        else answerHtml = demoAnswer(q);
         online = false;
       }
       hideTyping();

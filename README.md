@@ -3,29 +3,39 @@
 A customer chatbot for **Meadow Vet Care**, a modern Irish veterinary clinic
 (dogs, cats, rabbits, small mammals, birds) with 90+ services. It answers real
 questions — *"What dog services do you offer?"*, *"Any offers on microchipping?"*,
-*"Do you have telehealth services?"* — from the clinic's **live data**.
+*"Are you open Monday?"*, *"Is it too hot to walk my dog right now?"* — from
+**live data**, not a frozen script.
 
 ---
 
-## The MCP idea: giving the AI a live tool
+## The MCP idea: giving the AI live tools
 
-The assistant doesn't answer from a frozen copy of the data. On **every
-question**, the server reaches out to the clinic's Google Sheet, pulls the
-**current** catalogue, and grounds the model on it. Edit the sheet, ask again,
-and the answer changes. That's the Model Context Protocol idea in miniature: the
-model reaches a live source through a tool instead of guessing from memory.
+The assistant doesn't answer from a frozen copy of anything. Gemini has **three
+live tools** and decides for itself when to reach for each one:
+
+| Tool | Live source | Answers questions like |
+|---|---|---|
+| Service catalogue (inlined context, refreshed every request) | The clinic's Google Sheet | "What dog services do you offer?", "Any offers on microchipping?" |
+| `check_opening_hours` | [Nager.Date](https://date.nager.at) — real Irish public holidays | "Are you open Monday?", "Are you open on Christmas Day?" |
+| `check_dog_walk_weather` | [Open-Meteo](https://open-meteo.com) — live weather, no key needed | "Is it too hot to walk my dog right now?" |
+
+Edit the sheet, or ask on a different day or in different weather, and the
+answer changes — the model reaches live sources through tools instead of
+guessing from memory. That's the Model Context Protocol idea in miniature.
 
 ```
  User question
       │
       ▼
- ┌──────────────┐   POST /api/vet-chat   ┌────────────────────┐   fetch    ┌──────────────┐
- │  Chat UI     │ ─────────────────────► │  Vercel function   │ ─────────► │ Google Sheet │
- │ (static)     │ ◄───────────────────── │  (holds Gemini key)│ ◄───────── │  (live data) │
- └──────────────┘   natural-language     └─────────┬──────────┘            └──────────────┘
-                                                   │ grounds on live catalogue
-                                                   ▼
-                                             Google Gemini
+ ┌──────────────┐  POST /api/vet-chat  ┌─────────────────────┐
+ │  Chat UI     │ ────────────────────►│   Vercel function    │
+ │ (static)     │◄──────────────────── │  (holds Gemini key)  │
+ └──────────────┘   natural-language   └──────────┬───────────┘
+                                                   │ Gemini calls tools as needed
+                        ┌──────────────────────────┼───────────────────────────┐
+                        ▼                          ▼                           ▼
+                 Google Sheet              date.nager.at/…/IE           api.open-meteo.com
+               (service catalogue)         (Irish public holidays)      (live weather)
 ```
 
 The **Gemini API key lives server-side** in the Vercel function's environment —
@@ -36,8 +46,8 @@ it is never shipped to the browser.
 | Layer | File | How it works |
 |---|---|---|
 | **Front end** | `index.html`, `styles.css`, `app.js`, `config.js` | Chat page styled from `DESIGN.md` (Airbnb design system: white canvas, Rausch `#ff385c` accent, pill controls). Loads the sheet live for its "N services loaded" indicator. |
-| **AI brain** | `api/vet-chat.js` | Vercel serverless function. Fetches the live sheet, grounds **Gemini** on the full current catalogue, returns a natural-language answer. |
-| **Fallback** | `app.js` (demo responder) | If the brain endpoint isn't reachable (opened as a plain file, not deployed yet, offline), a built-in responder answers from the same live sheet — so the page always works. |
+| **AI brain** | `api/vet-chat.js` | Vercel serverless function. Runs a real Gemini function-calling loop over the three tools above and returns a natural-language answer. |
+| **Fallback** | `app.js` (demo responder) | If the brain endpoint isn't reachable (opened as a plain file, not deployed yet, offline), a built-in responder answers all three kinds of question from the same live sources — so the page always works. |
 
 The badge in the top-right reads **AI connected** when Gemini is answering, or
 **Demo mode** when the fallback is in use.
@@ -84,9 +94,15 @@ Gemini brain locally, run `vercel dev` with `GEMINI_API_KEY` set.
 ## Configuration
 
 - **Sheet / model** — `config.js` (front end) and env vars (`api/vet-chat.js`).
-- **Brain endpoint** — defaults to same-origin `/api/vet-chat`. If you host the
-  UI on GitHub Pages but the brain on Vercel, open the ⚙️ dialog and set the full
-  Vercel URL, or edit `chatEndpoint` in `config.js`.
+- **Brain endpoint** — defaults to the deployed Vercel URL in `config.js`
+  (`chatEndpoint`), so it works regardless of where the page itself is opened
+  from. Override at runtime via the ⚙️ dialog if needed.
+- **Clinic location for weather** — defaults to Dublin (53.3498, -6.2603).
+  Override with `CLINIC_LAT` / `CLINIC_LON` env vars in Vercel (and update the
+  matching constants in `app.js` for the demo fallback to stay in sync).
+- **Opening hours** — hardcoded as Monday–Saturday, 09:00–18:00, closed
+  Sundays and Irish public holidays (`OPEN_DAYS_LABEL` in `api/vet-chat.js`,
+  `OPEN_DAYS_LABEL` in `app.js`). Change both if the clinic's hours differ.
 
 ## Files
 
