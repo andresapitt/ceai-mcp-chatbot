@@ -13,6 +13,21 @@
 window.CONFIG = {
   clinicName: "Meadow Vet Care",
 
+  // ── Emergency contact ─────────────────────────────────────────────────────
+  // ⚠️ PLACEHOLDERS — replace with the clinic's real details. These power the
+  // emergency-escalation card (Feature 2). "Meadow Vet Care" is a demo clinic,
+  // so these are illustrative Irish values.
+  emergency: {
+    phoneDisplay: "(01) 555 0199",        // shown to the user
+    phoneDial: "+35315550199",            // used in the tel: link (no spaces)
+    // The live sheet lists 24/7 "Emergency stabilisation", so out-of-hours is
+    // the same in-house line. Change if the clinic uses a partner OOH service.
+    outOfHours: "Our emergency line is staffed 24/7 — call any time.",
+    address: "Meadow Vet Care, 12 Meadow Lane, Dublin 2",
+    // Directions link (Google Maps search by the address above).
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Meadow+Vet+Care+Dublin",
+  },
+
   // Google Sheet holding the live service catalogue.
   sheet: {
     id: "1JhSODtviGHzXru6Eb5MhfXfVIF5vtJk3pclzzv7j2l4",

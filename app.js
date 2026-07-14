@@ -391,6 +391,77 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // 3d. SAFETY — emergency detection & escalation
+  //     Deterministic, client-side, and instant: it renders the emergency card
+  //     BEFORE any LLM call, so the phone number appears immediately and even
+  //     offline. The server prompt (api/vet-chat.js) is a second net for the
+  //     long tail of phrasings this misses.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Toxic substances only count as an emergency alongside an "ingestion" verb,
+  // so "chocolate labrador" or "grape-flavoured" don't trip the alarm.
+  const TOXIC = /\b(chocolate|grapes?|raisins?|xylitol|rat ?poison|rodenticide|antifreeze|slug pellets?|lil(?:y|ies)|ibuprofen|paracetamol|acetaminophen|onions?|garlic|weed ?killer|cannabis|marijuana)\b/;
+  const INGEST = /\b(ate|eaten|eating|swallow(?:ed)?|ingest(?:ed)?|got into|licked|chewed|had some|got hold of)\b/;
+
+  // Strong, unambiguous emergencies — trigger on their own.
+  const HARD_EMERGENCY = new RegExp([
+    "can'?t breathe", "not breathing", "trouble breathing", "choking",
+    "collaps(?:e|ed|ing)", "unconscious", "unresponsive", "passed out",
+    "seizure", "seizing", "having a fit", "fitting", "convuls",
+    "hit by (?:a )?car", "\\bhbc\\b", "run over", "attacked",
+    "bleeding (?:badly|heavily|a lot)", "won'?t stop bleeding", "gushing blood",
+    "blue gums", "pale gums", "white gums",
+    "bloat(?:ed)?", "swollen (?:belly|stomach|abdomen)", "hard (?:belly|stomach|abdomen)",
+    "can'?t (?:pee|urinate|wee)", "straining to (?:pee|urinate)",
+    "giving birth", "in labour", "difficulty (?:giving birth|whelping)",
+    "heat ?stroke", "overheat(?:ing|ed)",
+    "broken (?:leg|bone)", "paralys", "dragging (?:his|her|its|their) (?:legs|back)",
+    "swollen (?:face|throat)", "allergic reaction",
+  ].join("|"), "i");
+
+  // Pricing/booking questions that merely contain a scary word are NOT active
+  // emergencies (e.g. "how much is emergency stabilisation").
+  const EMERGENCY_LOOKUP = /\b(how much|price|cost|€|book|booking|appointment|do you (?:offer|have|provide|treat|do)|stabilisation|opening|open on)\b/;
+
+  function isEmergency(t) {
+    const hard = HARD_EMERGENCY.test(t) || (TOXIC.test(t) && INGEST.test(t));
+    if (!hard) return false;
+    // If it's clearly a lookup AND has no hard-emergency verb pattern, treat as
+    // a normal question. Hard signals still win over lookup wording.
+    if (EMERGENCY_LOOKUP.test(t) && !HARD_EMERGENCY.test(t) && !(TOXIC.test(t) && INGEST.test(t))) return false;
+    return true;
+  }
+
+  function emergencyCardHtml() {
+    const e = (CFG.emergency) || {};
+    const phone = e.phoneDisplay || "the clinic";
+    const dial = e.phoneDial || "";
+    return `
+      <div class="em-head">⚠️ This may be an emergency</div>
+      <p>If your pet is unwell or in danger, please contact us <strong>now</strong> — don't wait for an online reply.</p>
+      ${dial ? `<a class="em-call" href="tel:${dial}">📞 Call ${phone}</a>` : `<p><strong>Call ${phone}</strong></p>`}
+      ${e.outOfHours ? `<div class="em-ooh">${e.outOfHours}</div>` : ""}
+      <ul>
+        <li>Keep your pet calm, warm and as still as possible.</li>
+        <li>If they swallowed something, bring the packaging or a sample with you.</li>
+        <li>Don't give food, water or any medicine unless we tell you to.</li>
+      </ul>
+      <div class="em-links">
+        ${e.address ? `${e.address}${e.mapsUrl ? ` · <a href="${e.mapsUrl}" target="_blank" rel="noopener">Directions</a>` : ""}` : ""}
+      </div>
+      <p class="em-disclaimer">This is guidance, not a diagnosis. When in doubt, call us.</p>`;
+  }
+
+  function addEmergencyCard() {
+    if (els.intro) { els.intro.remove(); els.intro = null; }
+    const el = document.createElement("div");
+    el.className = "emergency-card";
+    el.innerHTML = emergencyCardHtml();
+    els.messages.appendChild(el);
+    scrollDown();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // 4. CHAT UI
   // ═══════════════════════════════════════════════════════════════════════════
   function addMessage(role, html) {
@@ -463,6 +534,14 @@
     busy = true; els.send.disabled = true;
     els.input.value = ""; autosize();
     addMessage("user", escapeHtml(q));
+
+    // Safety first: an emergency short-circuits everything else. Deterministic,
+    // instant, and independent of the LLM — the phone number shows immediately.
+    if (isEmergency(q.toLowerCase())) {
+      addEmergencyCard();
+      busy = false; els.send.disabled = false; els.input.focus();
+      return;
+    }
 
     const trace = showToolTrace("Checking live data…");
     showTyping();

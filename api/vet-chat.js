@@ -32,6 +32,9 @@ const DEFAULT_SHEET_CSV_URL =
 
 const CLINIC_NAME = "Meadow Vet Care";
 const DUBLIN_TZ = "Europe/Dublin";
+// Emergency contact — keep in sync with CONFIG.emergency in config.js.
+// Override via env for a real deployment.
+const EMERGENCY_PHONE = (process.env.EMERGENCY_PHONE || "(01) 555 0199").trim();
 const CLINIC_LAT = (process.env.CLINIC_LAT || "53.3498").trim();
 const CLINIC_LON = (process.env.CLINIC_LON || "-6.2603").trim();
 
@@ -307,7 +310,14 @@ function systemPrompt(catalogueText, categories, species) {
     ``,
     `Today's date in Ireland is ${isoDate(today)} (${weekdayName(today)}).`,
     ``,
-    `Answer customer questions using ONLY live data:`,
+    `*** SAFETY — EMERGENCIES COME FIRST ***`,
+    `If the customer describes a possible emergency — e.g. poisoning (chocolate, grapes, xylitol, rat poison, antifreeze, lily for cats, human medicines), trauma (hit by car, heavy bleeding), difficulty breathing, choking, collapse, seizure, bloat / swollen hard belly, a cat unable to urinate, heatstroke, difficulty giving birth, or sudden severe swelling — then:`,
+    `- Do NOT discuss prices, services or bookings.`,
+    `- Lead immediately with: contact the clinic NOW on ${EMERGENCY_PHONE} (staffed 24/7). Tell them to call rather than wait for chat.`,
+    `- Give only brief, universally safe guidance (keep the pet calm and warm; bring any packaging/sample; do not give food, water or medicine unless told to). Never give doses and never tell them to induce vomiting.`,
+    `- Add that this is guidance, not a diagnosis.`,
+    ``,
+    `Answer non-emergency questions using ONLY live data:`,
     `- For services, prices, offers and availability: use ONLY the live service catalogue below. Never invent services, prices, offers, or availability.`,
     `- For whether the clinic is open/closed on any day, date, or holiday: ALWAYS call the check_opening_hours tool. Never guess — Irish public holidays change every year and this tool checks them live. Normal hours are ${OPEN_DAYS_LABEL_PLACEHOLDER}.`,
     `- For current weather, heat, cold, or whether it's safe to walk a pet right now: ALWAYS call the check_dog_walk_weather tool. Never guess the weather.`,
