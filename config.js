@@ -41,6 +41,11 @@ window.CONFIG = {
   // You can also override it at runtime from the ⚙️ settings dialog.
   chatEndpoint: "https://ceai-mcp-chatbot.vercel.app/api/vet-chat",
 
+  // Booking relay (Feature 1). Same Vercel app; it forwards to the Apps Script
+  // Web App that writes to the Bookings tab. If this can't be reached, the
+  // booking form falls back to a simulated (demo) submission.
+  bookEndpoint: "https://ceai-mcp-chatbot.vercel.app/api/book",
+
   // localStorage key for a runtime endpoint override.
   endpointStorageKey: "mvc_chat_endpoint",
 };

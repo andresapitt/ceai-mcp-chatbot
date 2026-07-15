@@ -43,6 +43,7 @@
     "What can you do for rabbits?",
     "Are you open Monday?",
     "Is it too hot to walk my dog right now?",
+    "Book an appointment",
   ];
 
   // Clinic constants shared with api/vet-chat.js (kept in sync manually —
@@ -462,6 +463,209 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // 3e. BOOKING — request an appointment (Feature 1)
+  //     A deterministic form-in-chat. Candidate slots are computed client-side
+  //     from clinic hours + Irish public holidays; the server (Apps Script via
+  //     /api/book) is the source of truth and rejects a clash on write. If the
+  //     server can't be reached, submission is simulated (demo) and clearly
+  //     labelled — never a silent fake success.
+  // ═══════════════════════════════════════════════════════════════════════════
+  function bookEndpoint() { return (CFG.bookEndpoint || "/api/book").trim(); }
+
+  function isBookingIntent(t) {
+    if (!/\b(book|booking|make an appointment|appointment|schedule|reserve|come in)\b/.test(t)) return false;
+    // Exclude info questions ("do you need an appointment?", "how much…", hours).
+    if (/\b(are you open|opening hours|what time|do (?:you|i) need|how much|price|cost|offer|require)\b/.test(t)) return false;
+    return true;
+  }
+
+  function serviceNames() {
+    return [...new Set(services.map((s) => s.service_name).filter(Boolean))].sort();
+  }
+  function lookupServiceRow(name, species) {
+    const byName = services.filter((s) => s.service_name === name);
+    if (species) {
+      const m = byName.find((s) => (s.species || "").toLowerCase() === species.toLowerCase());
+      if (m) return m;
+    }
+    return byName[0] || null;
+  }
+
+  async function slotInfoForDate(iso, durationMin) {
+    const [y, m, d] = iso.split("-").map(Number);
+    if (!y || !m || !d) return { open: false, reason: "Please pick a date." };
+    const date = ymdUTC(y, m, d);
+    const today = dublinToday();
+    if (date < today) return { open: false, reason: "That date has passed — pick a future day." };
+    if (weekdayName(date) === "Sunday") return { open: false, reason: "We're closed on Sundays." };
+    try {
+      const holidays = await fetchYearHolidaysClient(y);
+      const hol = holidays.find((h) => h.date === iso && h.types && h.types.includes("Public"));
+      if (hol) return { open: false, reason: `Closed — ${hol.name} (Irish public holiday).` };
+    } catch (_) { /* if the holiday API is down, still offer slots */ }
+    const dur = durationMin || 30;
+    const slots = [];
+    for (let t = 9 * 60; t + dur <= 18 * 60; t += 30) {
+      slots.push(`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`);
+    }
+    return { open: true, slots };
+  }
+
+  function renderBookingForm(prefill) {
+    prefill = prefill || {};
+    if (els.intro) { els.intro.remove(); els.intro = null; }
+    const speciesOpts = (speciesList.length ? speciesList : ["Dog", "Cat", "Rabbit", "Bird", "Small mammal"]);
+    const todayIso = isoDate(dublinToday());
+
+    const card = document.createElement("div");
+    card.className = "booking-card";
+    card.innerHTML = `
+      <div class="bk-head">📅 Request an appointment</div>
+      <div class="bk-field">
+        <label>Service</label>
+        <select class="bk-service">
+          <option value="">— choose a service —</option>
+          ${serviceNames().map((n) => `<option value="${n.replace(/"/g, "&quot;")}">${n}</option>`).join("")}
+        </select>
+      </div>
+      <div class="bk-row">
+        <div class="bk-field"><label>Pet's name</label><input class="bk-pet" placeholder="e.g. Luna" /></div>
+        <div class="bk-field"><label>Species</label>
+          <select class="bk-species">${speciesOpts.map((s) => `<option${prefill.species === s ? " selected" : ""}>${s}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="bk-field">
+        <label>Preferred date</label>
+        <input class="bk-date" type="date" min="${todayIso}" />
+        <div class="bk-slots-note" style="margin-top:6px">Pick a date to see available times.</div>
+        <div class="bk-slots"></div>
+      </div>
+      <div class="bk-row">
+        <div class="bk-field"><label>Your name</label><input class="bk-owner" placeholder="e.g. Aoife Byrne" /></div>
+        <div class="bk-field"><label>Phone or email</label><input class="bk-contact" placeholder="e.g. 087 123 4567" /></div>
+      </div>
+      <p class="bk-consent">By requesting, you agree we'll store these details to manage your appointment. Slots are confirmed by the clinic.</p>
+      <button class="bk-submit" disabled>Request appointment</button>
+      <div class="bk-msg"></div>`;
+    els.messages.appendChild(card);
+
+    const q = (sel) => card.querySelector(sel);
+    const svc = q(".bk-service"), dateEl = q(".bk-date"), slotsEl = q(".bk-slots"),
+      noteEl = q(".bk-slots-note"), submitEl = q(".bk-submit"), msgEl = q(".bk-msg");
+    let selectedTime = "";
+
+    if (prefill.species) q(".bk-species").value = prefill.species;
+
+    function refreshSubmit() {
+      const ready = svc.value && q(".bk-pet").value.trim() && dateEl.value &&
+        selectedTime && q(".bk-owner").value.trim() && q(".bk-contact").value.trim();
+      submitEl.disabled = !ready;
+    }
+    card.addEventListener("input", refreshSubmit);
+
+    async function onDateChange() {
+      selectedTime = ""; slotsEl.innerHTML = ""; refreshSubmit();
+      if (!dateEl.value) { noteEl.textContent = "Pick a date to see available times."; return; }
+      const row = lookupServiceRow(svc.value, q(".bk-species").value);
+      const dur = row ? Number(row.duration_min) || 30 : 30;
+      noteEl.textContent = "Checking the calendar…";
+      const info = await slotInfoForDate(dateEl.value, dur);
+      if (!info.open) { noteEl.textContent = info.reason; return; }
+      noteEl.textContent = "Available times (the clinic confirms your slot):";
+      info.slots.forEach((tm) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "bk-slot"; b.textContent = tm;
+        b.onclick = () => {
+          selectedTime = tm;
+          slotsEl.querySelectorAll(".bk-slot").forEach((x) => x.classList.remove("sel"));
+          b.classList.add("sel"); refreshSubmit();
+        };
+        slotsEl.appendChild(b);
+      });
+      scrollDown();
+    }
+    dateEl.addEventListener("change", onDateChange);
+    svc.addEventListener("change", () => { if (dateEl.value) onDateChange(); });
+
+    submitEl.onclick = async () => {
+      const row = lookupServiceRow(svc.value, q(".bk-species").value);
+      const payload = {
+        service_id: row ? row.service_id : "",
+        service_name: svc.value,
+        date: dateEl.value,
+        time: selectedTime,
+        duration_min: row ? row.duration_min : "",
+        pet_name: q(".bk-pet").value.trim(),
+        species: q(".bk-species").value,
+        owner_name: q(".bk-owner").value.trim(),
+        contact: q(".bk-contact").value.trim(),
+      };
+      submitEl.disabled = true; submitEl.textContent = "Requesting…"; msgEl.className = "bk-msg"; msgEl.textContent = "";
+      const result = await submitBooking(payload);
+      if (result.ok) {
+        card.remove();
+        renderConfirmation(payload, result.ref, result.simulated);
+      } else if (result.slotTaken) {
+        msgEl.className = "bk-msg err";
+        msgEl.textContent = "Sorry, that time was just taken — please pick another slot.";
+        selectedTime = ""; slotsEl.querySelectorAll(".bk-slot").forEach((x) => x.classList.remove("sel"));
+        submitEl.textContent = "Request appointment"; refreshSubmit();
+      } else {
+        msgEl.className = "bk-msg err";
+        msgEl.textContent = result.error || "Something went wrong — please call the clinic.";
+        submitEl.disabled = false; submitEl.textContent = "Request appointment";
+      }
+    };
+    scrollDown();
+  }
+
+  // Returns { ok, ref, simulated } | { slotTaken:true } | { error }
+  async function submitBooking(payload) {
+    try {
+      const res = await fetch(bookEndpoint(), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data && data.ok) return { ok: true, ref: data.ref, simulated: false };
+      if (res.status === 409 || (data && data.error === "slot_taken")) return { slotTaken: true };
+      // A real validation error from a configured server (bad contact, etc.).
+      if (res.status === 400 && data && data.error && !/not configured/i.test(data.error)) {
+        return { error: data.error };
+      }
+      // Not deployed / not configured / server error → simulate a demo request.
+      return simulateBooking();
+    } catch (_) {
+      return simulateBooking(); // offline / network error
+    }
+  }
+
+  function simulateBooking() {
+    const ref = "MVC-" + Math.floor(1000 + Math.random() * 9000);
+    return { ok: true, ref, simulated: true };
+  }
+
+  function renderConfirmation(payload, ref, simulated) {
+    const card = document.createElement("div");
+    card.className = "confirm-card";
+    const niceDate = (() => {
+      const [y, m, d] = payload.date.split("-").map(Number);
+      return ymdUTC(y, m, d).toLocaleDateString("en-IE", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+    })();
+    card.innerHTML = `
+      <div class="cf-head">✅ Appointment requested</div>
+      <p><strong>${payload.service_name}</strong> for <strong>${payload.pet_name}</strong> (${payload.species})<br>
+         ${niceDate} at <strong>${payload.time}</strong></p>
+      <p>Reference <span class="cf-ref">${ref}</span> — this slot is held; the clinic will <strong>confirm by phone or email</strong>.</p>
+      <p class="cf-note">${simulated
+        ? "⚠️ Demo mode — this request was <strong>not</strong> sent to the clinic. Once booking is connected it will submit for real. Please call to confirm."
+        : "A member of the team will be in touch shortly. Need directions or anything else?"}</p>`;
+    els.messages.appendChild(card);
+    scrollDown();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // 4. CHAT UI
   // ═══════════════════════════════════════════════════════════════════════════
   function addMessage(role, html) {
@@ -539,6 +743,15 @@
     // instant, and independent of the LLM — the phone number shows immediately.
     if (isEmergency(q.toLowerCase())) {
       addEmergencyCard();
+      busy = false; els.send.disabled = false; els.input.focus();
+      return;
+    }
+
+    // Booking intent → show the deterministic booking form (works online + demo).
+    if (isBookingIntent(q.toLowerCase())) {
+      const pre = interpret(q);
+      addMessage("assistant", "Of course — let's get you booked in. Fill this in and I'll send the request: 🐾");
+      renderBookingForm({ species: pre.species });
       busy = false; els.send.disabled = false; els.input.focus();
       return;
     }

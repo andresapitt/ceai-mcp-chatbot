@@ -23,6 +23,17 @@ Edit the sheet, or ask on a different day or in different weather, and the
 answer changes — the model reaches live sources through tools instead of
 guessing from memory. That's the Model Context Protocol idea in miniature.
 
+Beyond the read-only tools, two more capabilities round out the assistant:
+
+- **Emergency escalation** — if a customer describes an emergency (poisoning,
+  trauma, seizure, bloat, a cat that can't urinate…), a deterministic detector
+  shows a **call-us-now** card *instantly*, before any model call, so the phone
+  number never sits behind a slow reply.
+- **Appointment booking** *(the first **write** path)* — a booking form-in-chat
+  writes a `requested` row to a **Bookings** tab in the same Google Sheet via a
+  Google Apps Script Web App (relayed through `/api/book`, which holds the
+  secret). Staff confirm from the sheet. See [`HOW-TO.md`](HOW-TO.md) to enable.
+
 ```
  User question
       │
@@ -107,11 +118,14 @@ Gemini brain locally, run `vercel dev` with `GEMINI_API_KEY` set.
 ## Files
 
 ```
-index.html      chat page (markup)
-styles.css      design system from DESIGN.md
-config.js       sheet + endpoint configuration
-app.js          data loading · chat UI · brain call · demo fallback
-api/vet-chat.js Vercel serverless function — the Gemini brain + live sheet
-HOW-TO.md       adding the two files to an existing Vercel app (+ Next.js variants)
-DESIGN.md       the design language this UI is built from
+index.html         chat page (markup)
+styles.css         design system from DESIGN.md
+config.js          sheet · endpoints · emergency contact
+app.js             data loading · chat UI · brain call · emergency · booking · demo fallback
+api/vet-chat.js    Vercel function — Gemini brain + live tools (catalogue, hours, weather)
+api/book.js        Vercel function — booking relay to the Apps Script Web App
+apps-script/Code.gs Apps Script Web App — writes bookings to the Sheet (LockService)
+ROADMAP.md         feature roadmap from the user-panel study
+HOW-TO.md          add to an existing Vercel app · enable booking (+ Next.js variants)
+DESIGN.md          the design language this UI is built from
 ```

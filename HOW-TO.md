@@ -91,9 +91,38 @@ permissive CORS headers.
 
 ---
 
-## 3. Test
+## 3. Test the chat
 
 Open the page and ask *"What dog services do you offer?"*. The top-right badge
 should read **AI connected**. If it says **Demo mode**, the page couldn't reach
 the endpoint — check the function path, the `GEMINI_API_KEY` env var, and
 (if cross-origin) the `chatEndpoint` URL. The browser console logs the reason.
+
+---
+
+## 4. (Optional) Enable appointment booking (Feature 1)
+
+Until this is set up, the booking form still works but submissions are
+**simulated** and clearly labelled "demo — not sent". To make bookings write for
+real into a **Bookings** tab of the Google Sheet:
+
+1. **Add the tab.** In the clinic's Google Sheet, add a tab named exactly
+   `Bookings` (the script also creates it + a header row if missing).
+2. **Add the Apps Script.** In the sheet: **Extensions → Apps Script**. Paste
+   [`apps-script/Code.gs`](apps-script/Code.gs). At the top, set:
+   - `SHEET_ID` — the id from the sheet URL (`…/spreadsheets/d/THIS/edit`),
+   - `SECRET` — a long random string,
+   - `NOTIFY_EMAIL` — optional, where new-request emails go.
+3. **Deploy.** **Deploy → New deployment → Web app**, *Execute as: Me*,
+   *Who has access: Anyone*. Copy the **Web app URL**.
+   *(Re-deploy after any edit: Deploy → Manage deployments → edit → Deploy.)*
+4. **Wire it to Vercel.** Add two env vars to the project:
+   - `APPSCRIPT_URL` = the Web app URL from step 3,
+   - `APPSCRIPT_TOKEN` = the same string you used for `SECRET`.
+5. **Point the form at it.** `bookEndpoint` in `config.js` defaults to the Vercel
+   `/api/book` URL — set it to your app's URL if different.
+
+**Test:** say *"book an appointment"*, fill the form, submit. A real request
+appends a `requested` row to the Bookings tab and returns a reference; the
+confirmation card no longer shows the "demo" note. `LockService` in the script
+prevents two people booking the same slot (the second gets "slot just taken").

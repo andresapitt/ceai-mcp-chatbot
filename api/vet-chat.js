@@ -327,6 +327,7 @@ function systemPrompt(catalogueText, categories, species) {
     `- Be warm, concise and easy to scan: a short sentence, then a bullet list where helpful. Use **bold** for service names and key facts.`,
     `- If several species have the same service, focus on the pet the customer asked about.`,
     `- If something is not in the catalogue, say the clinic does not appear to offer it and suggest what they could ask instead.`,
+    `- To book an appointment, tell the customer to say "book an appointment" (or tap the booking suggestion) — a short booking form opens. You do not take bookings yourself.`,
     `- For emergencies or specific medical advice, gently recommend booking an appointment or calling the clinic.`,
     ``,
     `Known categories: ${categories.join(", ")}.`,

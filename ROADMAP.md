@@ -50,53 +50,49 @@ short-circuit · M3 server prompt rule + false-positive tuning.
 
 ---
 
-### Feature 1 — Appointment booking (Google Calendar, request→confirm)  ·  Effort L  ·  ★★★
-**Status: planned; blocked on Google Cloud setup + contact details.**
+### Feature 1 — Appointment booking (Google Apps Script + Sheet, request→confirm)  ·  Effort L  ·  ★★★
+**Status: built; goes live once the Apps Script Web App is deployed + wired.**
 
-The flagship, and the first **write** tool — the honest completion of "give the AI
-a live tool": now it can *act*, not just look up.
+The flagship, and the first **write** path — the honest completion of "give the AI
+a live tool": now it can *act*, not just look up. Bookings land in a **Bookings tab
+in the same Google Sheet**, so staff manage them beside the service catalogue.
 
-**Backend (chosen): Google Calendar API, request→staff-confirm.**
-- Dedicated clinic Google Calendar. Bot **reads** free/busy to offer real slots,
-  and **writes** each request as a **tentative** event staff confirm from their
-  normal calendar app. Tentative events count as busy → act as a **soft hold** so
-  two people can't request the same slot.
-- **Auth (headless):** a Google Cloud **service account**; the clinic shares its
-  calendar with the service-account email ("Make changes to events"). The
-  function mints a short-lived token (JWT → Google token endpoint).
-- **Dependency note:** introduces the project's first npm dependency
-  (`google-auth-library` + `package.json`); Vercel installs it automatically.
-  Zero-dep alternative: hand-roll RS256 JWT with Node `crypto`.
+**Backend (chosen): Google Apps Script + Sheet, request→staff-confirm.**
+- A **booking form-in-chat** (deterministic, works online *and* offline) collects
+  service, pet, date → time slot, and contact.
+- The form POSTs to a small Vercel function **`api/book.js`**, which holds the
+  Apps Script secret and forwards the request. The browser never sees the token.
+- A deployed **Apps Script Web App** appends a `requested` row to the Bookings tab,
+  using **`LockService` + a conflict re-check** to prevent double-booking, and
+  emails the clinic (and optionally the owner). Staff confirm from the sheet.
 
-**Tools (server-side; demo mode degrades gracefully):**
-- `get_availability({ service_id?, day_or_date?, from_date? })` *(read)* — Calendar
-  **FreeBusy** minus clinic hours minus Sundays/Irish holidays (reuses
-  `check_opening_hours`), stepped by the service's `duration_min`.
-- `request_appointment({ service_id, date, time, pet_name, species, owner_name, contact })`
-  *(write)* — inserts a **tentative** event (`REQUEST: <service> — <pet> (<owner>)`,
-  contact + price in description, structured data in `extendedProperties.private`),
-  re-checks free/busy just before insert, returns a **reference**.
-- *(Later)* `cancel` / `reschedule` by event id.
+**Why no separate availability read:** the client shows candidate slots computed
+from **clinic hours + Irish public holidays** (reuses the Feature-2/weather holiday
+logic); the Apps Script is the source of truth and **rejects a clash on write**.
+This avoids exposing a personal-data read endpoint.
 
-**Customer flow:** find slots → slot chips → gather pet + owner details →
-**explicit "shall I book it?" consent gate** → write tentative event →
-*"Requested ✅ Ref MVC-4821 — slot held; the clinic will confirm by phone/text."*
+**Customer flow:** booking intent → **booking form card** (service prefilled if
+detected; pet name/species; date → time-slot chips; owner name + contact; consent
+line) → submit → `api/book` → Apps Script append (conflict-checked) →
+**confirmation card**: *"Requested ✅ Ref MVC-4821 — slot held; the clinic will
+confirm by phone/text."*
 
-**Security / privacy (EU/GDPR):** service-account creds + calendar id live only in
-Vercel env; explicit confirm before any write; consent line; no personal data in
-URLs; contact stored in the clinic's own calendar.
+**Security / privacy (EU/GDPR):** Apps Script URL + secret live only in Vercel env;
+explicit submit action (no silent write); consent line; no personal data in URLs;
+details stored only in the clinic's own sheet.
 
-**Demo-mode degradation:** FreeBusy is server-only, so offline mode shows
-**provisional** slots (hours+holidays only, clearly labelled) and can't submit a
-request — it says "please call."
+**Demo-mode degradation:** offline / no server → the form still works and shows
+candidate slots, but submit is **simulated** with an honest "this is a demo — please
+call to confirm" note (no write). Live mode writes for real.
 
-**One-time setup (user):** Google Cloud project → enable Calendar API → create
-service account + key → share clinic calendar with it → set
-`GOOGLE_SERVICE_ACCOUNT_JSON` + `CLINIC_CALENDAR_ID` in Vercel.
+**One-time setup (user):** add a **Bookings** tab → open **Extensions → Apps Script**,
+paste `apps-script/Code.gs`, set a secret + sheet id → **Deploy → Web app** (execute
+as you, access "Anyone") → copy the URL → set `APPSCRIPT_URL` + `APPSCRIPT_TOKEN` in
+Vercel. (Full steps in `HOW-TO.md`.)
 
-**Milestones:** M1 cloud setup + token + test insert · M2 `get_availability` +
-slot-chip UI + demo degradation · M3 `request_appointment` + confirm gate +
-summary card · M4 edge cases + consent + emergency interlock + e2e.
+**Milestones (done):** M1 Apps Script + `api/book.js` · M2 booking form + slot
+computation + demo simulate · M3 confirmation card + consent + emergency/booking
+interlock. **Remaining (user):** deploy the Apps Script + set the two env vars.
 
 ---
 
