@@ -55,7 +55,8 @@ short-circuit · M3 server prompt rule + false-positive tuning.
 
 The flagship, and the first **write** path — the honest completion of "give the AI
 a live tool": now it can *act*, not just look up. Bookings land in a **Bookings tab
-in the same Google Sheet**, so staff manage them beside the service catalogue.
+in a dedicated bookings spreadsheet** (`vet chatbot bookings`, kept separate from
+the services-catalogue sheet so demo data and real customer requests never mix).
 
 **Backend (chosen): Google Apps Script + Sheet, request→staff-confirm.**
 - A **booking form-in-chat** (deterministic, works online *and* offline) collects

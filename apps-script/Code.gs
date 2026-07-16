@@ -2,13 +2,15 @@
  * Meadow Vet Care — booking Web App (Google Apps Script)
  * ---------------------------------------------------------------------------
  * Receives appointment requests from the Vercel function (api/book.js) and
- * appends them to a "Bookings" tab in the clinic's Google Sheet. Uses
- * LockService + a conflict re-check so two people can't grab the same slot.
+ * appends them to a "Bookings" tab in a DEDICATED bookings Google Sheet
+ * (separate from the services-catalogue sheet in config.js / api/vet-chat.js).
+ * Uses LockService + a conflict re-check so two people can't grab the same
+ * slot.
  *
  * SETUP (one time)
- *  1. In the clinic's Google Sheet: add a tab named exactly "Bookings"
- *     (this script will create it and its header row if missing).
- *  2. Extensions → Apps Script → paste this file.
+ *  1. Open the dedicated bookings spreadsheet. It needs a tab named exactly
+ *     "Bookings" (this script creates it and its header row if missing).
+ *  2. In that spreadsheet: Extensions → Apps Script → paste this file.
  *  3. Set the two values below:
  *       SHEET_ID  — the id in the sheet URL (…/spreadsheets/d/THIS_PART/edit)
  *       SECRET    — any long random string; put the SAME value in Vercel as
@@ -23,7 +25,8 @@
  */
 
 // ── Config ───────────────────────────────────────────────────────────────────
-var SHEET_ID = "1JhSODtviGHzXru6Eb5MhfXfVIF5vtJk3pclzzv7j2l4"; // ← the clinic sheet
+// The dedicated "vet chatbot bookings" spreadsheet — NOT the services sheet.
+var SHEET_ID = "1QiWoLlOpiTjFHG9n9_MwP1x9Duj7lBZMb3A72TuD49w";
 var SECRET = "CHANGE_ME_to_a_long_random_string";              // ← same as APPSCRIPT_TOKEN in Vercel
 var NOTIFY_EMAIL = "";  // ← optional: e.g. "reception@meadowvet.ie" (blank = no email)
 var TAB = "Bookings";

@@ -103,14 +103,17 @@ the endpoint — check the function path, the `GEMINI_API_KEY` env var, and
 ## 4. (Optional) Enable appointment booking (Feature 1)
 
 Until this is set up, the booking form still works but submissions are
-**simulated** and clearly labelled "demo — not sent". To make bookings write for
-real into a **Bookings** tab of the Google Sheet:
+**simulated** and clearly labelled "demo — not sent". Bookings write to a
+**dedicated bookings spreadsheet** — kept separate from the services-catalogue
+sheet so real customer data never mixes with demo catalogue data.
 
-1. **Add the tab.** In the clinic's Google Sheet, add a tab named exactly
-   `Bookings` (the script also creates it + a header row if missing).
-2. **Add the Apps Script.** In the sheet: **Extensions → Apps Script**. Paste
-   [`apps-script/Code.gs`](apps-script/Code.gs). At the top, set:
-   - `SHEET_ID` — the id from the sheet URL (`…/spreadsheets/d/THIS/edit`),
+1. **Use (or create) the dedicated bookings spreadsheet.** It needs a tab
+   named exactly `Bookings` (the script also creates it + a header row if
+   missing). This project's demo uses `vet chatbot bookings`
+   (id `1QiWoLlOpiTjFHG9n9_MwP1x9Duj7lBZMb3A72TuD49w`) — swap in your own.
+2. **Add the Apps Script.** In that spreadsheet: **Extensions → Apps Script**.
+   Paste [`apps-script/Code.gs`](apps-script/Code.gs). At the top, set:
+   - `SHEET_ID` — the id from the *bookings* sheet's URL (`…/spreadsheets/d/THIS/edit`) — **not** the services sheet,
    - `SECRET` — a long random string,
    - `NOTIFY_EMAIL` — optional, where new-request emails go.
 3. **Deploy.** **Deploy → New deployment → Web app**, *Execute as: Me*,

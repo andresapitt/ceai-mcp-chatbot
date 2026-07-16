@@ -30,9 +30,10 @@ Beyond the read-only tools, two more capabilities round out the assistant:
   shows a **call-us-now** card *instantly*, before any model call, so the phone
   number never sits behind a slow reply.
 - **Appointment booking** *(the first **write** path)* — a booking form-in-chat
-  writes a `requested` row to a **Bookings** tab in the same Google Sheet via a
-  Google Apps Script Web App (relayed through `/api/book`, which holds the
-  secret). Staff confirm from the sheet. See [`HOW-TO.md`](HOW-TO.md) to enable.
+  writes a `requested` row to a **Bookings** tab in a *dedicated bookings
+  spreadsheet* (kept separate from the services-catalogue sheet) via a Google
+  Apps Script Web App (relayed through `/api/book`, which holds the secret).
+  Staff confirm from the sheet. See [`HOW-TO.md`](HOW-TO.md) to enable.
 
 ```
  User question
