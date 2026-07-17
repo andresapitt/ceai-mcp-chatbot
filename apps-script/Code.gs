@@ -123,7 +123,7 @@ function slotTaken_(sheet, date, time) {
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
     var rDate = formatDate_(row[0]);
-    var rTime = String(row[1]).slice(0, 5);
+    var rTime = formatTime_(row[1]);
     var rStatus = String(row[7]).toLowerCase();
     if (rDate === date && rTime === String(time).slice(0, 5) && rStatus !== "cancelled") {
       return true;
@@ -137,6 +137,17 @@ function formatDate_(v) {
     return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
   }
   return String(v).slice(0, 10);
+}
+
+// Sheets auto-converts a "HH:mm"-looking string into a Time-typed cell
+// (a Date object under the hood) — without this, String(row) on such a cell
+// yields a full date-time string, not "HH:mm", and the conflict check below
+// silently never matches.
+function formatTime_(v) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), "HH:mm");
+  }
+  return String(v).slice(0, 5);
 }
 
 function makeRef_() {
