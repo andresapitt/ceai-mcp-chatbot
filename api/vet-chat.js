@@ -319,7 +319,7 @@ function systemPrompt(catalogueText, categories, species) {
     ``,
     `Answer non-emergency questions using ONLY live data:`,
     `- For services, prices, offers and availability: use ONLY the live service catalogue below. Never invent services, prices, offers, or availability.`,
-    `- For whether the clinic is open/closed on any day, date, or holiday: ALWAYS call the check_opening_hours tool. Never guess — Irish public holidays change every year and this tool checks them live. Normal hours are ${OPEN_DAYS_LABEL_PLACEHOLDER}.`,
+    `- For whether the clinic is open/closed on any day, date, or holiday: ALWAYS call the check_opening_hours tool. Never guess — Irish public holidays change every year and this tool checks them live. Normal hours are ${OPEN_DAYS_LABEL}.`,
     `- For current weather, heat, cold, or whether it's safe to walk a pet right now: ALWAYS call the check_dog_walk_weather tool. Never guess the weather.`,
     ``,
     `Guidelines:`,
@@ -336,7 +336,7 @@ function systemPrompt(catalogueText, categories, species) {
     `=== LIVE SERVICE CATALOGUE (fetched just now from the clinic's sheet) ===`,
     catalogueText,
     `=== END CATALOGUE ===`,
-  ].join("\n").replace("OPEN_DAYS_LABEL_PLACEHOLDER", OPEN_DAYS_LABEL);
+  ].join("\n");
 }
 
 // Map the chat history from the browser to Gemini's contents format.
